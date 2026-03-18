@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EventType {
+  auth
+  file
+  admin
+  network
+  app
+}
+
+enum EventAction {
+  login_success
+  login_failed
+  read
+  download
+  delete
+  export
+  privilege_change
+  other
+}
+
+enum AlertStatus {
+  open
+  investigating
+  resolved
+}
+
+enum DetectionRule {
+  OFF_HOURS_PRIVILEGED_ACTION
+  IMPOSSIBLE_TRAVEL
+  DOWNLOAD_SPIKE
+  FAILED_LOGINS_THEN_SUCCESS
+}
+
+enum AlertSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum IntegrationProvider {
+  aws
+  gcp
+  azure
+  github
+  slack
+}
+
+enum IntegrationStatus {
+  disconnected
+  connected
+  error
+}
+
+model Event {
+  id        String    @id @default(cuid())
+  timestamp DateTime
+  userId    String
+  deviceId  String
+  ip        String
+  geo       String
+  eventType EventType
+  action    EventAction
+  resource  String
+  role      String
+  metadata  Json
+  raw       Json
+  createdAt DateTime  @default(now())
+
+  anomalies Anomaly[]
+  alerts    Alert[]
+
+  @@index([userId, timestamp])
+}
+
+model Anomaly {
+  id        String        @id @default(cuid())
+  eventId   String
+  userId    String
+  rule      DetectionRule
+  score     Int
+  reason    String
+  createdAt DateTime      @default(now())
+
+  event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  alertLinks AlertAnomaly[]
+
+  @@index([userId, createdAt])
+}
+
+model Alert {
+  id        String        @id @default(cuid())
+  userId    String
+  eventId   String
+  severity  AlertSeverity
+  riskScore Int
+  summary   String
+  status    AlertStatus   @default(open)
+  notes     String[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  anomalyLinks  AlertAnomaly[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AlertAnomaly {
+  alertId   String
+  anomalyId String
+
+  alert   Alert   @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  anomaly Anomaly @relation(fields: [anomalyId], references: [id], onDelete: Cascade)
+
+  @@id([alertId, anomalyId])
+}
+
+model IntegrationConnection {
+  id          String            @id @default(cuid())
+  provider    IntegrationProvider @unique
+  status      IntegrationStatus @default(disconnected)
+  displayName String?
+  metadata    Json?
+  connectedAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
